@@ -3,6 +3,7 @@ export class Controls {
 	constructor() {
 
 		this.keys = {};
+		this.previousViewKey = false;
 		this.x = 0;
 		this.z = 0;
 
@@ -156,7 +157,11 @@ export class Controls {
 		this.x = x;
 		this.z = z;
 
-		return { x, z, touchActive: this.touchActive };
+		const viewKey = !! this.keys[ 'KeyV' ];
+		const cameraToggle = viewKey && ! this.previousViewKey;
+		this.previousViewKey = viewKey;
+
+		return { x, z, touchActive: this.touchActive, cameraToggle };
 
 	}
 

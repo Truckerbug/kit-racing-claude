@@ -3,6 +3,9 @@ import * as THREE from 'three';
 const _desired = new THREE.Vector3();
 const _delta = new THREE.Vector3();
 const _lookPoint = new THREE.Vector3();
+const _cameraOffset = new THREE.Vector3();
+const _forward = new THREE.Vector3();
+const _cameraQuaternion = new THREE.Quaternion();
 
 export class Camera {
 
@@ -12,6 +15,11 @@ export class Camera {
 
 		// Matches Godot View: 45° azimuth, 35° elevation, distance 16
 		this.offset = new THREE.Vector3( 9.27, 9.18, 9.27 );
+		this.mode = 0;
+		this.chaseOffset = new THREE.Vector3( 0, 5, - 10 );
+		this.firstPersonOffset = new THREE.Vector3( 0, 1.15, 0.65 );
+		this.chaseLookAhead = 4;
+		this.modeNames = [ 'angled', 'chase', 'first-person' ];
 
 		this.camera.position.copy( this.offset );
 		this.camera.lookAt( 0, 0, 0 );
@@ -55,7 +63,44 @@ export class Camera {
 
 	}
 
-	update( dt, target, velocity ) {
+	cycleMode() {
+
+		this.mode = ( this.mode + 1 ) % this.modeNames.length;
+		this.initialized = false;
+		console.info( `Camera: ${ this.modeNames[ this.mode ] }` );
+
+	}
+
+	update( dt, target, velocity, rotation ) {
+
+		if ( this.mode !== 0 ) {
+
+			_cameraQuaternion.copy( rotation );
+
+			if ( this.mode === 1 ) {
+
+				_cameraOffset.copy( this.chaseOffset ).applyQuaternion( _cameraQuaternion );
+				this.camera.position.copy( target ).add( _cameraOffset );
+				_forward.set( 0, 0, 1 ).applyQuaternion( _cameraQuaternion );
+				_lookPoint.copy( target ).addScaledVector( _forward, this.chaseLookAhead );
+				_lookPoint.y += 0.6;
+
+			} else {
+
+				_cameraOffset.copy( this.firstPersonOffset ).applyQuaternion( _cameraQuaternion );
+				this.camera.position.copy( target ).add( _cameraOffset );
+				_forward.set( 0, 0, 1 ).applyQuaternion( _cameraQuaternion );
+				_lookPoint.copy( this.camera.position ).addScaledVector( _forward, 10 );
+
+			}
+
+			this.camera.lookAt( _lookPoint );
+			this.debug.visible = false;
+			return;
+
+		}
+
+		this.debug.visible = true;
 
 		const radius = this.deadzoneRadius;
 		const radiusSq = radius * radius;

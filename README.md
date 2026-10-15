@@ -1,13 +1,14 @@
-# Starter Kit Racing
+# Starter Kit Racing - Improved
 
-A JavaScript/Three.js port of [Kenney's Starter Kit Racing](https://github.com/KenneyNL/Starter-Kit-Racing).
+## Run
 
-[Play](https://mrdoob.github.io/Starter-Kit-Racing/) · [Devlog](https://x.com/mrdoob/status/2048358619985690935)
-
-![Screenshot](screenshot.png)
+```sh
+python3 -m http.server 8000 --bind 0.0.0.0
+```
 
 ## Credits
 
+- Original Starter Kit Racing by mrdoob [Original Github](https://github.com/mrdoob/Starter-Kit-Racing)
 - Game assets by [Kenney](https://kenney.nl/) (CC0)
 - Physics engine: [crashcat](https://github.com/isaac-mason/crashcat)
 - Ported to JavaScript with [Claude](https://claude.ai/)

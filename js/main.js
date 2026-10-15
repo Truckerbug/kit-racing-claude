@@ -261,6 +261,7 @@ async function init() {
 		const dt = Math.min( timer.getDelta(), 1 / 30 );
 
 		const input = controls.update();
+		if ( input.cameraToggle ) cam.cycleMode();
 
 		updateWorld( world, contactListener, dt );
 
@@ -274,7 +275,7 @@ async function init() {
 
 		const mv = vehicle.modelVelocity;
 		_camLead.set( 0, 0, 1 ).applyQuaternion( vehicle.container.quaternion ).multiplyScalar( Math.sqrt( mv.x * mv.x + mv.z * mv.z ) );
-		cam.update( dt, vehicle.spherePos, _camLead );
+		cam.update( dt, vehicle.spherePos, _camLead, vehicle.container.quaternion );
 		particles.update( dt, vehicle );
 		driftMarks.update( dt, vehicle );
 		audio.update( dt, vehicle.linearSpeed / MAX_SPEED, input.z, vehicle.driftIntensity );

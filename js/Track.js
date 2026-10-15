@@ -310,7 +310,14 @@ export function placePiece( models, key, gx, gz, orient ) {
 	const src = models[ key ];
 	if ( ! src ) return null;
 
-	const piece = src.clone();
+	let piece = src.clone();
+	if ( key === 'track-bump' ) {
+
+		const road = models[ 'track-straight' ].clone();
+		road.add( piece );
+		piece = road;
+
+	}
 	piece.position.set( ( gx + 0.5 ) * CELL_RAW, 0.5, ( gz + 0.5 ) * CELL_RAW );
 
 	const deg = ORIENT_DEG[ orient ] ?? 0;

@@ -14,6 +14,44 @@ function addDebugBox( group, halfExtents, position, quaternion ) {
 
 }
 
+function addBumpColliders( world, cx, cz, rad ) {
+
+	const radius = 1.25;
+	const height = 0.44;
+	const baseY = - 0.115;
+	const rampLength = Math.hypot( radius, height );
+	const rampAngle = Math.atan2( height, radius );
+	const yaw = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), rad );
+
+	for ( const side of [ - 1, 1 ] ) {
+
+		const pitch = new THREE.Quaternion().setFromAxisAngle(
+			new THREE.Vector3( 1, 0, 0 ), - side * rampAngle
+		);
+		const quaternion = yaw.clone().multiply( pitch );
+		const localZ = side * radius / 2;
+		const position = [
+			cx + localZ * Math.sin( rad ),
+			baseY + height / 2,
+			cz + localZ * Math.cos( rad ),
+		];
+		const halfExtents = [ 1.15, 0.07, rampLength / 2 ];
+		const rotation = [ quaternion.x, quaternion.y, quaternion.z, quaternion.w ];
+
+		rigidBody.create( world, {
+			shape: box.create( { halfExtents } ),
+			motionType: MotionType.STATIC,
+			objectLayer: world._OL_STATIC,
+			position,
+			quaternion: rotation,
+			friction: 1.0,
+			restitution: 0.0,
+		} );
+
+	}
+
+}
+
 export function buildWallColliders( world, debugGroup, customCells ) {
 
 	const S = GRID_SCALE;
@@ -71,8 +109,6 @@ export function buildWallColliders( world, debugGroup, customCells ) {
 
 	for ( const [ gx, gz, key, orient ] of cells ) {
 
-		if ( key === 'track-bump' ) continue;
-
 		const cx = ( gx + 0.5 ) * CELL_RAW * S;
 		const cz = ( gz + 0.5 ) * CELL_RAW * S;
 
@@ -80,7 +116,7 @@ export function buildWallColliders( world, debugGroup, customCells ) {
 		const rad = deg * Math.PI / 180;
 		const cr = Math.cos( rad ), sr = Math.sin( rad );
 
-		if ( key === 'track-straight' || key === 'track-finish' ) {
+		if ( key === 'track-straight' || key === 'track-finish' || key === 'track-bump' ) {
 
 			for ( const side of [ - 1, 1 ] ) {
 
@@ -104,6 +140,8 @@ export function buildWallColliders( world, debugGroup, customCells ) {
 				if ( debugGroup ) addDebugBox( debugGroup, halfExtents, position, quaternion );
 
 			}
+
+			if ( key === 'track-bump' ) addBumpColliders( world, cx, cz, rad );
 
 		} else if ( key === 'track-corner' ) {
 

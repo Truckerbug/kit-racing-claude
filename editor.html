@@ -44,6 +44,15 @@
 			height: 20px;
 			display: block;
 		}
+		#toolbar button.piece-button {
+			width: 48px;
+			min-height: 48px;
+			padding: 4px 2px;
+			flex-direction: column;
+			gap: 2px;
+			font-size: 10px;
+		}
+		#toolbar button.piece-button svg { width: 32px; height: 24px; }
 		#toolbar button:hover {
 			background: rgba(0, 0, 0, 0.05);
 			color: #1f2430;
@@ -139,8 +148,14 @@
 		<button id="btn-pan" title="View (3)" aria-label="View">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
 		</button>
-		<button id="btn-road" class="active" title="Road (1)" aria-label="Road">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+		<button id="btn-straight" class="piece-button active" title="Straight (1)" aria-label="Straight">
+			<svg viewBox="0 0 32 24" aria-hidden="true"><path d="M11 1h10v22H11z" fill="currentColor"/><path d="M16 2v4m0 4v4m0 4v4" stroke="#fff" stroke-width="1.5"/></svg><span>Straight</span>
+		</button>
+		<button id="btn-turn" class="piece-button" title="Turn (2)" aria-label="Turn">
+			<svg viewBox="0 0 32 24" aria-hidden="true"><path d="M8 2v8a6 6 0 0 0 6 6h10" fill="none" stroke="currentColor" stroke-width="8"/><path d="M8 2v5m0 5a6 6 0 0 0 6 6h5" fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="3 3"/></svg><span>Turn</span>
+		</button>
+		<button id="btn-bump" class="piece-button" title="Bump (3)" aria-label="Bump">
+			<svg viewBox="0 0 32 24" aria-hidden="true"><path d="M11 1h10v22H11z" fill="currentColor"/><path d="M16 2v4m0 4v4m0 4v4" stroke="#fff" stroke-width="1.5"/><path d="M12 13q4-8 8 0" fill="none" stroke="#f6c85f" stroke-width="2"/></svg><span>Bump</span>
 		</button>
 		<button id="btn-erase" title="Erase (2)" aria-label="Erase">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
@@ -190,7 +205,10 @@
 	// ─── State ────────────────────────────────────────────────
 
 	const grid = new Map(); // "gx,gz" → { type, orient, isFinish, mesh }
-	let tool = 'road'; // 'road', 'erase', 'pan'
+	let tool = 'straight'; // piece types, 'erase', or 'pan'
+	const pieceOrientations = { straight: 0, turn: 0, bump: 0 };
+	const pieceTypes = { straight: 'track-straight', turn: 'track-corner', bump: 'track-bump' };
+	const pieceOrientationSteps = { straight: [ 0, 16 ], turn: [ 0, 16, 10, 22 ], bump: [ 0, 16 ] };
 
 	function cellKey( gx, gz ) { return gx + ',' + gz; }
 
@@ -543,10 +561,8 @@
 
 		if ( cell.mesh ) trackGroup.remove( cell.mesh );
 
-		const src = models[ cell.type ];
-		if ( ! src ) return;
-
-		const mesh = src.clone();
+		const mesh = createPieceMesh( cell.type );
+		if ( ! mesh ) return;
 		mesh.position.set( ( gx + 0.5 ) * CELL_RAW, 0.5, ( gz + 0.5 ) * CELL_RAW );
 		mesh.rotation.y = THREE.MathUtils.degToRad( ORIENT_DEG[ cell.orient ] || 0 );
 		mesh.traverse( ( c ) => {
@@ -562,6 +578,22 @@
 
 		trackGroup.add( mesh );
 		cell.mesh = mesh;
+
+	}
+
+	function createPieceMesh( type ) {
+
+		if ( type === 'track-bump' ) {
+
+			const road = models[ 'track-straight' ]?.clone();
+			const bump = models[ 'track-bump' ]?.clone();
+			if ( ! road || ! bump ) return null;
+			road.add( bump );
+			return road;
+
+		}
+
+		return models[ type ]?.clone() || null;
 
 	}
 
@@ -637,6 +669,12 @@
 				cell.orient = ORIENT_FLIP[ cell.orient ] ?? cell.orient;
 				placeMesh( gx, gz, cell );
 				save();
+			} else if ( pieceTypes[ tool ] ) {
+
+				cell.type = pieceTypes[ tool ];
+				cell.orient = pieceOrientations[ tool ];
+				placeMesh( gx, gz, cell );
+				save();
 
 			}
 
@@ -644,8 +682,13 @@
 
 		}
 
-		grid.set( key, { type: 'track-straight', orient: 0, isFinish: false, mesh: null } );
-		resolveCellAndNeighbors( gx, gz );
+		grid.set( key, {
+			type: pieceTypes[ tool ],
+			orient: pieceOrientations[ tool ],
+			isFinish: false,
+			mesh: null
+		} );
+		placeMesh( gx, gz, grid.get( key ) );
 		save();
 
 	}
@@ -698,13 +741,12 @@
 
 	// Neighbor cells whose meshes are temporarily swapped during ghost preview
 	const ghostNeighborBackups = []; // { cell, originalMesh }
+	let hoveredCell = null;
 
 	function addGhostPiece( type, orient, gx, gz, opacity ) {
 
-		const src = models[ type ];
-		if ( ! src ) return;
-
-		const mesh = src.clone();
+		const mesh = createPieceMesh( type );
+		if ( ! mesh ) return;
 		mesh.position.set( ( gx + 0.5 ) * CELL_RAW, 0.5, ( gz + 0.5 ) * CELL_RAW );
 
 		const deg = ORIENT_DEG[ orient ] || 0;
@@ -730,64 +772,13 @@
 
 		clearGhost();
 
-		if ( tool !== 'road' ) return;
+		hoveredCell = { gx, gz };
+		if ( ! pieceTypes[ tool ] ) return;
 
 		const key = cellKey( gx, gz );
 		if ( grid.has( key ) ) return; // already occupied
 
-		// Temporarily insert ghost cell into grid
-		const ghostCell = { type: 'track-straight', orient: 0, isFinish: false, mesh: null };
-		grid.set( key, ghostCell );
-
-		// Resolve ghost: connect to neighbors, pick best pair if 3+
-		const [ type, orient ] = resolveNewTile( gx, gz );
-
-		// Update ghost cell in grid so neighbors see its correct exits
-		ghostCell.type = type;
-		ghostCell.orient = orient;
-
-		// Show ghost piece
-		addGhostPiece( type, orient, gx, gz, 0.4 );
-
-		// Check how neighbors would change and preview those changes
-		const neighbors = [ [ gx, gz - 1 ], [ gx, gz + 1 ], [ gx + 1, gz ], [ gx - 1, gz ] ];
-
-		for ( const [ nx, nz ] of neighbors ) {
-
-			const nKey = cellKey( nx, nz );
-			const nCell = grid.get( nKey );
-			if ( ! nCell ) continue;
-
-			// Re-resolve neighbor, but skip if it would break existing connections
-			const nExits = getCellExits( nCell );
-			const nConn = getConnectivityMask( nx, nz );
-			const nConnected = nExits & nConn;
-
-			const [ newType, newOrient ] = resolveTile( nx, nz );
-			const proposedExits = getCellExits( { type: newType, orient: newOrient } );
-			if ( ( proposedExits & nConnected ) !== nConnected ) continue;
-
-			const finalType = ( nCell.isFinish && newType === 'track-straight' ) ? 'track-finish' : newType;
-
-			if ( finalType !== nCell.type || newOrient !== nCell.orient ) {
-
-				// Hide the real mesh temporarily
-				if ( nCell.mesh ) {
-
-					nCell.mesh.visible = false;
-					ghostNeighborBackups.push( { cell: nCell } );
-
-				}
-
-				// Show preview of what the neighbor would become
-				addGhostPiece( finalType, newOrient, nx, nz, 0.7 );
-
-			}
-
-		}
-
-		// Remove the temporary ghost cell from the grid
-		grid.delete( key );
+		addGhostPiece( pieceTypes[ tool ], pieceOrientations[ tool ], gx, gz, 0.55 );
 
 	}
 
@@ -898,24 +889,38 @@
 
 	// ─── Toolbar ──────────────────────────────────────────────
 
-	const btnRoad = document.getElementById( 'btn-road' );
+	const pieceButtons = {
+		straight: document.getElementById( 'btn-straight' ),
+		turn: document.getElementById( 'btn-turn' ),
+		bump: document.getElementById( 'btn-bump' ),
+	};
 	const btnErase = document.getElementById( 'btn-erase' );
 	const btnPan = document.getElementById( 'btn-pan' );
 
 	function selectTool( t ) {
 
 		tool = t;
-		btnRoad.classList.toggle( 'active', t === 'road' );
+		for ( const [ piece, button ] of Object.entries( pieceButtons ) ) {
+
+			button.classList.toggle( 'active', t === piece );
+
+		}
+
 		btnErase.classList.toggle( 'active', t === 'erase' );
 		btnPan.classList.toggle( 'active', t === 'pan' );
 
-		if ( t === 'pan' ) clearGhost();
+		clearGhost();
 
 		updateCursor();
 
 	}
 
-	btnRoad.addEventListener( 'click', () => selectTool( 'road' ) );
+	for ( const [ piece, button ] of Object.entries( pieceButtons ) ) {
+
+		button.addEventListener( 'click', () => selectTool( piece ) );
+
+	}
+
 	btnErase.addEventListener( 'click', () => selectTool( 'erase' ) );
 	btnPan.addEventListener( 'click', () => selectTool( 'pan' ) );
 
@@ -1214,15 +1219,31 @@
 
 		} else if ( e.key === '1' ) {
 
-			selectTool( 'road' );
+			selectTool( 'straight' );
 
 		} else if ( e.key === '2' ) {
 
-			selectTool( 'erase' );
+			selectTool( 'turn' );
 
 		} else if ( e.key === '3' ) {
 
+			selectTool( 'bump' );
+
+		} else if ( e.key === '4' ) {
+
+			selectTool( 'erase' );
+
+		} else if ( e.key === '5' ) {
+
 			selectTool( 'pan' );
+
+		} else if ( e.key.toLowerCase() === 'r' && pieceTypes[ tool ] ) {
+
+			const steps = pieceOrientationSteps[ tool ];
+			const index = steps.indexOf( pieceOrientations[ tool ] );
+			pieceOrientations[ tool ] = steps[ ( index + 1 ) % steps.length ];
+			clearGhost();
+			if ( hoveredCell ) updateGhost( hoveredCell.gx, hoveredCell.gz );
 
 		}
 
