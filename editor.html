@@ -89,6 +89,52 @@
 			color: #a64b25;
 		}
 
+		#generator-menu[hidden] { display: none; }
+		#generator-menu {
+			position: absolute;
+			inset: 0;
+			display: grid;
+			place-items: center;
+			padding: 20px;
+			background: rgba(12, 18, 24, 0.38);
+			z-index: 30;
+		}
+		#generator-menu .panel {
+			width: min(100%, 360px);
+			padding: 22px;
+			background: #fff;
+			border-radius: 16px;
+			box-shadow: 0 16px 48px rgba(0, 0, 0, 0.24);
+			color: #1f2430;
+		}
+		#generator-menu h2 { margin: 0 0 6px; font-size: 18px; }
+		#generator-menu p { margin: 0 0 18px; color: #657080; font-size: 13px; line-height: 1.45; }
+		#generator-menu label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; }
+		#generator-menu .seed-row { display: flex; gap: 8px; }
+		#generator-menu input {
+			width: 100%;
+			min-width: 0;
+			padding: 10px 12px;
+			border: 1px solid #cbd1d9;
+			border-radius: 8px;
+			font: inherit;
+		}
+		#generator-menu button {
+			padding: 10px 13px;
+			border: 0;
+			border-radius: 8px;
+			background: #eef1f4;
+			color: #1f2430;
+			font: inherit;
+			font-size: 13px;
+			font-weight: 600;
+			cursor: pointer;
+			white-space: nowrap;
+		}
+		#generator-menu button:hover { filter: brightness(0.96); }
+		#generator-menu .menu-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+		#generator-menu button.generate { background: #4caf6a; color: #fff; }
+
 		#toast {
 			position: absolute;
 			bottom: 90px;
@@ -161,6 +207,9 @@
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
 		</button>
 		<div class="separator"></div>
+		<button id="btn-generator" title="Generate track" aria-label="Generate track">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12m0-12.72-2.12 2.12m-8.48 8.48-2.12 2.12"/><circle cx="12" cy="12" r="4"/></svg>
+		</button>
 		<button id="btn-play" class="action" title="Play track" aria-label="Play track">
 			<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
 		</button>
@@ -170,11 +219,28 @@
 		</button>
 	</div>
 
+	<div id="generator-menu" hidden>
+		<div class="panel" role="dialog" aria-modal="true" aria-labelledby="generator-title">
+			<h2 id="generator-title">Generate a track</h2>
+			<p>Create a closed road loop with connected straights and turns. Generating replaces the current track.</p>
+			<label for="track-seed">Seed</label>
+			<div class="seed-row">
+				<input id="track-seed" type="number" min="0" max="4294967295" step="1" inputmode="numeric">
+				<button id="randomize-seed" type="button">Randomize</button>
+			</div>
+			<div class="menu-actions">
+				<button id="cancel-generation" type="button">Cancel</button>
+				<button id="generate-track" class="generate" type="button">Generate</button>
+			</div>
+		</div>
+	</div>
+
 	<div id="toast"></div>
 
 	<script type="module">
 	import * as THREE from 'three';
 	import { ORIENT_DEG, CELL_RAW, GRID_SCALE, encodeCells, decodeCells } from './js/Track.js';
+	import { generateTrack } from './js/TrackGenerator.js';
 	import { ColorMapGLTFLoader } from './js/Loader.js';
 
 	// ─── Auto-tile lookup ─────────────────────────────────────
@@ -896,6 +962,112 @@
 	};
 	const btnErase = document.getElementById( 'btn-erase' );
 	const btnPan = document.getElementById( 'btn-pan' );
+	const generatorMenu = document.getElementById( 'generator-menu' );
+	const seedInput = document.getElementById( 'track-seed' );
+
+	function openGeneratorMenu() {
+
+		seedInput.value = String( Math.floor( Math.random() * 0x100000000 ) );
+		generatorMenu.hidden = false;
+		seedInput.focus();
+		seedInput.select();
+
+	}
+
+	function closeGeneratorMenu() {
+
+		generatorMenu.hidden = true;
+
+	}
+
+	function frameCells( cells ) {
+
+		const xs = cells.map( ( cell ) => cell[ 0 ] );
+		const zs = cells.map( ( cell ) => cell[ 1 ] );
+		const minX = Math.min( ...xs ), maxX = Math.max( ...xs );
+		const minZ = Math.min( ...zs ), maxZ = Math.max( ...zs );
+		const width = ( maxX - minX + 1 ) * CELL_RAW * GRID_SCALE;
+		const height = ( maxZ - minZ + 1 ) * CELL_RAW * GRID_SCALE;
+		const aspect = window.innerWidth / window.innerHeight;
+		const centerX = ( minX + maxX + 1 ) * CELL_RAW * GRID_SCALE / 2;
+		const centerZ = ( minZ + maxZ + 1 ) * CELL_RAW * GRID_SCALE / 2 + camOffsetZ;
+
+		camera.zoom = Math.min(
+			1,
+			frustum * 1.7 / height,
+			frustum * aspect * 1.7 / width
+		);
+		camera.position.set( centerX, 50, centerZ );
+		camTarget.set( centerX, 0, centerZ );
+		camera.lookAt( camTarget );
+		camera.updateProjectionMatrix();
+
+	}
+
+	document.getElementById( 'btn-generator' ).addEventListener( 'click', openGeneratorMenu );
+	document.getElementById( 'randomize-seed' ).addEventListener( 'click', () => {
+
+		const seed = new Uint32Array( 1 );
+		window.crypto.getRandomValues( seed );
+		seedInput.value = String( seed[ 0 ] );
+
+	} );
+	document.getElementById( 'cancel-generation' ).addEventListener( 'click', closeGeneratorMenu );
+	generatorMenu.addEventListener( 'click', ( event ) => {
+
+		if ( event.target === generatorMenu ) closeGeneratorMenu();
+
+	} );
+	window.addEventListener( 'keydown', ( event ) => {
+
+		if ( event.key === 'Escape' && ! generatorMenu.hidden ) closeGeneratorMenu();
+
+	} );
+	document.getElementById( 'generate-track' ).addEventListener( 'click', () => {
+
+		const seed = Number( seedInput.value );
+		if ( ! Number.isInteger( seed ) || seed < 0 || seed > 0xFFFFFFFF ) {
+
+			showToast( 'Seed must be an integer from 0 to 4294967295' );
+			seedInput.focus();
+			return;
+
+		}
+
+		if ( ! confirm( 'Replace the current track with a generated track?' ) ) return;
+
+		try {
+
+			const cells = generateTrack( seed );
+			clearGhost();
+			for ( const cell of grid.values() ) {
+
+				if ( cell.mesh ) trackGroup.remove( cell.mesh );
+
+			}
+
+			grid.clear();
+			for ( const [ gx, gz, type, orient ] of cells ) {
+
+				const cell = { type, orient, isFinish: type === 'track-finish', mesh: null };
+				grid.set( cellKey( gx, gz ), cell );
+				placeMesh( gx, gz, cell );
+
+			}
+
+			save();
+			frameCells( cells );
+			closeGeneratorMenu();
+			showToast( `Generated track with seed ${ seed }` );
+
+		} catch ( error ) {
+
+			console.error( 'Failed to generate track', error );
+			showToast( 'Track generation failed; try another seed' );
+
+		}
+
+	} );
 
 	function selectTool( t ) {
 
@@ -1205,6 +1377,8 @@
 	}, { passive: false } );
 
 	window.addEventListener( 'keydown', ( e ) => {
+
+		if ( e.target instanceof HTMLInputElement ) return;
 
 		if ( e.key === ' ' ) {
 
