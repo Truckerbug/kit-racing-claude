@@ -379,7 +379,7 @@ export function decodeCells( str ) {
 
 }
 
-export function computeSpawnPosition( cells ) {
+export function computeSpawnPosition( cells = TRACK_CELLS ) {
 
 	let cell = cells[ 0 ];
 
@@ -402,7 +402,7 @@ export function computeSpawnPosition( cells ) {
 	const z = ( gz + 0.5 ) * CELL_RAW * GRID_SCALE;
 
 	const orient = cell[ 3 ];
-	const angle = THREE.MathUtils.degToRad( ORIENT_DEG[ orient ] || 0 );
+	const angle = THREE.MathUtils.degToRad( ORIENT_DEG[ orient ] ?? 0 ) + Math.PI;
 
 	return { position: [ x, 0.5, z ], angle };
 

@@ -121,7 +121,7 @@ async function init() {
 
 	const mapParam = new URLSearchParams( window.location.search ).get( 'map' );
 	let customCells = null;
-	let spawn = null;
+	let spawn = computeSpawnPosition();
 
 	if ( mapParam ) {
 
@@ -200,20 +200,11 @@ async function init() {
 		restitution: 0.0,
 	} );
 
-	const sphereBody = createSphereBody( world, spawn ? spawn.position : null );
+	const sphereBody = createSphereBody( world, spawn.position );
 
-	const vehicle = new Vehicle();
+	const vehicle = new Vehicle( spawn );
 	vehicle.rigidBody = sphereBody;
 	vehicle.physicsWorld = world;
-
-	if ( spawn ) {
-
-		const [ sx, sy, sz ] = spawn.position;
-		vehicle.spherePos.set( sx, sy, sz );
-		vehicle.prevModelPos.set( sx, 0, sz );
-		vehicle.container.rotation.y = spawn.angle;
-
-	}
 
 	const vehicleGroup = vehicle.init( models[ 'vehicle-truck-yellow' ] );
 	scene.add( vehicleGroup );
