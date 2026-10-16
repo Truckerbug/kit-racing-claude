@@ -221,7 +221,6 @@ async function init() {
 	dirLight.target = vehicleGroup;
 
 	const cam = new Camera();
-	scene.add( cam.debug );
 
 	const controls = new Controls();
 
@@ -255,12 +254,20 @@ async function init() {
 
 	function animate() {
 
+		const input = controls.update();
+
+		if ( input.restart ) {
+
+			window.location.reload();
+			return;
+
+		}
+
 		requestAnimationFrame( animate );
 
 		timer.update();
 		const dt = Math.min( timer.getDelta(), 1 / 30 );
 
-		const input = controls.update();
 		if ( input.cameraToggle ) cam.cycleMode();
 
 		updateWorld( world, contactListener, dt );

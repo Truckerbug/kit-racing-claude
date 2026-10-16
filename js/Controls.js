@@ -4,6 +4,7 @@ export class Controls {
 
 		this.keys = {};
 		this.previousViewKey = false;
+		this.previousRestartKey = false;
 		this.x = 0;
 		this.z = 0;
 
@@ -161,7 +162,11 @@ export class Controls {
 		const cameraToggle = viewKey && ! this.previousViewKey;
 		this.previousViewKey = viewKey;
 
-		return { x, z, touchActive: this.touchActive, cameraToggle };
+		const restartKey = !! this.keys[ 'KeyR' ];
+		const restart = restartKey && ! this.previousRestartKey;
+		this.previousRestartKey = restartKey;
+
+		return { x, z, touchActive: this.touchActive, cameraToggle, restart };
 
 	}
 

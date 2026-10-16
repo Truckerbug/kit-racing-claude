@@ -38,22 +38,6 @@ export class Camera {
 		this.smoothedDesired = new THREE.Vector3();
 		this.initialized = false;
 
-		const segments = 64;
-		const points = [];
-		for ( let i = 0; i <= segments; i ++ ) {
-
-			const a = ( i / segments ) * Math.PI * 2;
-			points.push( new THREE.Vector3( Math.cos( a ), 0, Math.sin( a ) ) );
-
-		}
-		const dzGeom = new THREE.BufferGeometry().setFromPoints( points );
-		this.debug = new THREE.Line( dzGeom, new THREE.LineBasicMaterial( { color: 0xff00ff, depthTest: false } ) );
-		this.debug.visible = false;
-		this.debug.renderOrder = 999;
-		this.debug.quaternion.setFromRotationMatrix(
-			new THREE.Matrix4().makeBasis( this.camRightXZ, new THREE.Vector3( 0, 1, 0 ), this.camForwardXZ )
-		);
-
 		window.addEventListener( 'resize', () => {
 
 			this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -95,12 +79,9 @@ export class Camera {
 			}
 
 			this.camera.lookAt( _lookPoint );
-			this.debug.visible = false;
 			return;
 
 		}
-
-		this.debug.visible = true;
 
 		const radius = this.deadzoneRadius;
 		const radiusSq = radius * radius;
@@ -146,10 +127,6 @@ export class Camera {
 
 		this.camera.position.copy( _lookPoint ).add( this.offset );
 		this.camera.lookAt( _lookPoint );
-
-		this.debug.position.copy( this.smoothedDesired );
-		this.debug.position.y += 0.05;
-		this.debug.scale.set( radius, 1, radius );
 
 	}
 

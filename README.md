@@ -6,6 +6,8 @@
 python3 -m http.server 8000 --bind 0.0.0.0
 ```
 
+Press **R** to restart the game.
+
 ## Credits
 
 - Original Starter Kit Racing by mrdoob [Original Github](https://github.com/mrdoob/Starter-Kit-Racing)
