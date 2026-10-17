@@ -211,9 +211,10 @@ async function init() {
 		const [ sx, sy, sz ] = spawn.position;
 		vehicle.spherePos.set( sx, sy, sz );
 		vehicle.prevModelPos.set( sx, 0, sz );
-		vehicle.container.rotation.y = spawn.angle;
 
 	}
+
+	vehicle.container.rotation.y = spawn ? spawn.angle : Math.PI;
 
 	const vehicleGroup = vehicle.init( models[ 'vehicle-truck-yellow' ] );
 	scene.add( vehicleGroup );
