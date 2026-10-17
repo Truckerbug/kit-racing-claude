@@ -25,22 +25,26 @@ function lerpAngle( a, b, t ) {
 
 export class Vehicle {
 
-	constructor() {
+	constructor( spawn = { position: [ 3.5, 0.5, 5 ], angle: 0 } ) {
+
+		this.spawnPosition = spawn.position;
+		this.spawnAngle = spawn.angle;
 
 		this.linearSpeed = 0;
 		this.angularSpeed = 0;
 		this.acceleration = 0;
 
-		this.spherePos = new THREE.Vector3( 3.5, 0.5, 5 );
+		this.spherePos = new THREE.Vector3( ...this.spawnPosition );
 		this.sphereVel = new THREE.Vector3();
 
 		this.rigidBody = null;
 		this.physicsWorld = null;
 
 		this.modelVelocity = new THREE.Vector3();
-		this.prevModelPos = new THREE.Vector3( 3.5, 0, 5 );
+		this.prevModelPos = new THREE.Vector3( this.spawnPosition[ 0 ], 0, this.spawnPosition[ 2 ] );
 
 		this.container = new THREE.Group();
+		this.container.rotation.y = this.spawnAngle;
 		this.bodyNode = null;
 		this.wheels = [];
 		this.wheelFL = null;
@@ -193,19 +197,18 @@ export class Vehicle {
 
 			if ( this.rigidBody ) {
 
-				rigidBody.setPosition( this.physicsWorld, this.rigidBody, [ 3.5, 0.5, 5 ], false );
+				rigidBody.setPosition( this.physicsWorld, this.rigidBody, this.spawnPosition, false );
 				rigidBody.setLinearVelocity( this.physicsWorld, this.rigidBody, [ 0, 0, 0 ] );
 				rigidBody.setAngularVelocity( this.physicsWorld, this.rigidBody, [ 0, 0, 0 ] );
 
 			}
 
-			this.spherePos.set( 3.5, 0.5, 5 );
+			this.spherePos.fromArray( this.spawnPosition );
 			this.sphereVel.set( 0, 0, 0 );
 			this.linearSpeed = 0;
 			this.angularSpeed = 0;
 			this.acceleration = 0;
-			this.container.rotation.set( 0, 0, 0 );
-			this.container.quaternion.identity();
+			this.container.rotation.set( 0, this.spawnAngle, 0 );
 
 		}
 

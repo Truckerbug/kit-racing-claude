@@ -379,7 +379,7 @@ export function decodeCells( str ) {
 
 }
 
-export function computeSpawnPosition( cells ) {
+export function computeSpawnPosition( cells = TRACK_CELLS ) {
 
 	let cell = cells[ 0 ];
 

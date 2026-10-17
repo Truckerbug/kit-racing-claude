@@ -14,10 +14,19 @@ import { GameAudio } from './Audio.js';
 import { LapTimer } from './LapTimer.js';
 import { ColorMapGLTFLoader } from './Loader.js';
 
+const MAX_PIXEL_RATIO = 1.5;
+const MAX_PROBE_RESOLUTION = 8;
+const MAX_SHADOW_EXTENT = 40;
 
 const renderer = new THREE.WebGLRenderer( { antialias: true, outputBufferType: THREE.HalfFloatType } );
-renderer.setSize( window.innerWidth, window.innerHeight );
-renderer.setPixelRatio( window.devicePixelRatio );
+function resizeRenderer() {
+
+	renderer.setPixelRatio( Math.min( window.devicePixelRatio, MAX_PIXEL_RATIO ) );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+
+}
+
+resizeRenderer();
 renderer.shadowMap.enabled = true;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
@@ -38,7 +47,7 @@ scene.fog = new THREE.Fog( 0xadb2ba, 30, 55 );
 const dirLight = new THREE.DirectionalLight( 0xffffff, 3 );
 dirLight.position.set( 11.4, 15, -5.3 );
 dirLight.castShadow = true;
-dirLight.shadow.mapSize.setScalar( 4096 );
+dirLight.shadow.mapSize.setScalar( 2048 );
 dirLight.shadow.camera.near = 0.5;
 dirLight.shadow.camera.far = 60;
 dirLight.shadow.radius = 4;
@@ -51,7 +60,7 @@ scene.add( hemiLight );
 
 window.addEventListener( 'resize', () => {
 
-	renderer.setSize( window.innerWidth, window.innerHeight );
+	resizeRenderer();
 
 } );
 
@@ -121,7 +130,7 @@ async function init() {
 
 	const mapParam = new URLSearchParams( window.location.search ).get( 'map' );
 	let customCells = null;
-	let spawn = null;
+	let spawn = computeSpawnPosition();
 
 	if ( mapParam ) {
 
@@ -144,7 +153,7 @@ async function init() {
 	const hd = bounds.halfDepth;
 	const groundSize = Math.max( hw, hd ) * 2 + 20;
 
-	const shadowExtent = Math.max( hw, hd ) + 10;
+	const shadowExtent = Math.min( Math.max( hw, hd ) + 10, MAX_SHADOW_EXTENT );
 	dirLight.shadow.camera.left = - shadowExtent;
 	dirLight.shadow.camera.right = shadowExtent;
 	dirLight.shadow.camera.top = shadowExtent;
@@ -161,9 +170,9 @@ async function init() {
 	const probeHeight = 6;
 	const probes = new LightProbeGrid(
 		hw * 2, probeHeight, hd * 2,
-		Math.max( 4, Math.round( hw / 4 ) ),
+		Math.min( MAX_PROBE_RESOLUTION, Math.max( 4, Math.round( hw / 4 ) ) ),
 		2,
-		Math.max( 4, Math.round( hd / 4 ) ),
+		Math.min( MAX_PROBE_RESOLUTION, Math.max( 4, Math.round( hd / 4 ) ) ),
 	);
 	probes.position.set( bounds.centerX, probeHeight / 2, bounds.centerZ );
 	probes.bake( renderer, scene, { cubemapSize: 32, near: 0.1, far: groundSize } );
@@ -200,9 +209,9 @@ async function init() {
 		restitution: 0.0,
 	} );
 
-	const sphereBody = createSphereBody( world, spawn ? spawn.position : null );
+	const sphereBody = createSphereBody( world, spawn.position );
 
-	const vehicle = new Vehicle();
+	const vehicle = new Vehicle( spawn );
 	vehicle.rigidBody = sphereBody;
 	vehicle.physicsWorld = world;
 
