@@ -1,5 +1,5 @@
 import { rigidBody } from 'crashcat';
-import { CELL_RAW, GRID_SCALE, buildTrackChunk } from './Track.js';
+import { CELL_RAW, GRID_SCALE, OBSTACLE_TYPES, buildTrackChunk } from './Track.js';
 import { buildWallColliders } from './Physics.js';
 import { InfiniteTrackGenerator } from './TrackGenerator.js';
 
@@ -17,6 +17,7 @@ export class InfiniteTrack {
 		this.generator = new InfiniteTrackGenerator( seed );
 		this.cellSize = CELL_RAW * GRID_SCALE;
 		this.chunks = [];
+		this.obstacleBodies = new Set();
 		this.checkpointIndex = - 1;
 
 		this.addChunk();
@@ -28,10 +29,12 @@ export class InfiniteTrack {
 
 		const { cells, headings, incomingHeadings, startIndex, endIndex } = this.generator.generateChunk( CELLS_PER_CHUNK );
 		const group = buildTrackChunk( this.scene, this.models, cells, headings, incomingHeadings );
-		const bodies = buildWallColliders( this.world, null, cells );
+		const chunkObstacleBodies = new Set();
+		const bodies = buildWallColliders( this.world, null, cells, chunkObstacleBodies );
 		const endZ = Math.max( ...cells.map( ( cell ) => ( cell[ 1 ] + 0.5 ) * this.cellSize ) );
 
-		this.chunks.push( { cells, headings, incomingHeadings, startIndex, endIndex, group, bodies, endZ } );
+		for ( const body of chunkObstacleBodies ) this.obstacleBodies.add( body );
+		this.chunks.push( { cells, headings, incomingHeadings, startIndex, endIndex, group, bodies, obstacleBodies: chunkObstacleBodies, endZ } );
 
 	}
 
@@ -68,6 +71,7 @@ export class InfiniteTrack {
 
 				const index = chunk.startIndex + i;
 				if ( index <= this.checkpointIndex ) continue;
+				if ( OBSTACLE_TYPES.includes( chunk.cells[ i ][ 2 ] ) ) continue;
 
 				const [ gx, gz ] = chunk.cells[ i ];
 				const x = ( gx + 0.5 ) * this.cellSize;
@@ -110,6 +114,8 @@ export class InfiniteTrack {
 			rigidBody.remove( this.world, body );
 
 		}
+
+		for ( const body of chunk.obstacleBodies ) this.obstacleBodies.delete( body );
 
 	}
 

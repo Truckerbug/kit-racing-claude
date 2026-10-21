@@ -10,6 +10,8 @@ Press **C** to cycle between the yellow, green, purple, and red trucks. Press **
 
 Use the **Infinite course** button in the top-right corner to switch to a randomly generated endless track. The same button returns to the classic course.
 
+Open `editor.html` to design and share courses. The designer includes bump, cone, barrel, and tire obstacles; seeded generated courses and the infinite track also place hazards.
+
 ## Credits
 
 - Original Starter Kit Racing by mrdoob [Original Github](https://github.com/mrdoob/Starter-Kit-Racing)
