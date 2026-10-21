@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { rigidBody, box, sphere, MotionType, MotionQuality } from 'crashcat';
-import { TRACK_CELLS, CELL_RAW, ORIENT_DEG, GRID_SCALE } from './Track.js';
+import { TRACK_CELLS, CELL_RAW, ORIENT_DEG, GRID_SCALE, OBSTACLE_TYPES } from './Track.js';
 
 const _debugMat = new THREE.MeshBasicMaterial( { color: 0x00ff00, wireframe: true } );
 
@@ -52,7 +52,44 @@ function addBumpColliders( world, cx, cz, rad, bodies ) {
 
 }
 
-export function buildWallColliders( world, debugGroup, customCells ) {
+function addObstacleColliders( world, type, cx, cz, rad, bodies, obstacleBodies ) {
+
+	const S = GRID_SCALE;
+	const colliderBoxes = {
+		'track-cones': [ [ - 1.2, 0.515, - 1.4, 0.3, 0.515, 0.3 ], [ 1.2, 0.515, 1.4, 0.3, 0.515, 0.3 ] ],
+		'track-barrels': [ [ - 2.0, 0.495, 0, 0.45, 0.495, 0.45 ], [ 2.0, 0.495, 0, 0.45, 0.495, 0.45 ] ],
+		'track-tires': [ [ 0, 0.4, 0, 1.0, 0.4, 0.62 ] ],
+	};
+	const cr = Math.cos( rad );
+	const sr = Math.sin( rad );
+
+	for ( const [ lx, ly, lz, hx, hy, hz ] of colliderBoxes[ type ] || [] ) {
+
+		const position = [
+			cx + ( lx * cr + lz * sr ) * S,
+			ly * S,
+			cz + ( - lx * sr + lz * cr ) * S,
+		];
+		const quaternion = [ 0, Math.sin( rad / 2 ), 0, Math.cos( rad / 2 ) ];
+
+		const body = rigidBody.create( world, {
+			shape: box.create( { halfExtents: [ hx * S, hy * S, hz * S ] } ),
+			motionType: MotionType.STATIC,
+			objectLayer: world._OL_STATIC,
+			position,
+			quaternion,
+			friction: 0.0,
+			restitution: 0.1,
+		} );
+
+		bodies.push( body );
+		obstacleBodies.add( body );
+
+	}
+
+}
+
+export function buildWallColliders( world, debugGroup, customCells, obstacleBodies = new Set() ) {
 
 	const bodies = [];
 	const S = GRID_SCALE;
@@ -117,7 +154,7 @@ export function buildWallColliders( world, debugGroup, customCells ) {
 		const rad = deg * Math.PI / 180;
 		const cr = Math.cos( rad ), sr = Math.sin( rad );
 
-		if ( key === 'track-straight' || key === 'track-finish' || key === 'track-bump' ) {
+		if ( key === 'track-straight' || key === 'track-finish' || OBSTACLE_TYPES.includes( key ) ) {
 
 			for ( const side of [ - 1, 1 ] ) {
 
@@ -143,6 +180,7 @@ export function buildWallColliders( world, debugGroup, customCells ) {
 			}
 
 			if ( key === 'track-bump' ) addBumpColliders( world, cx, cz, rad, bodies );
+			else if ( OBSTACLE_TYPES.includes( key ) ) addObstacleColliders( world, key, cx, cz, rad, bodies, obstacleBodies );
 
 		} else if ( key === 'track-corner' ) {
 

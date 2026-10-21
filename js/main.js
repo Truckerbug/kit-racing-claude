@@ -9,7 +9,7 @@ import { Controls } from './Controls.js';
 import { buildTrack, decodeCells, computeSpawnPosition, computeTrackBounds, CELL_RAW, GRID_SCALE } from './Track.js';
 import { buildWallColliders, createSphereBody } from './Physics.js';
 import { InfiniteTrack } from './InfiniteTrack.js';
-import { SmokeTrails } from './Particles.js';
+import { SmokeTrails, VehicleExplosion } from './Particles.js';
 import { DriftMarks } from './DriftMarks.js';
 import { GameAudio } from './Audio.js';
 import { LapTimer } from './LapTimer.js';
@@ -73,7 +73,7 @@ const vehicleModelNames = [
 
 const modelNames = [
 	...vehicleModelNames,
-	'track-straight', 'track-corner', 'track-bump', 'track-finish',
+	'track-straight', 'track-corner', 'track-bump', 'track-cones', 'track-barrels', 'track-tires', 'track-finish',
 	'decoration-empty', 'decoration-forest', 'decoration-tents',
 ];
 
@@ -189,7 +189,8 @@ async function init() {
 	world._OL_MOVING = OL_MOVING;
 	world._OL_STATIC = OL_STATIC;
 
-	if ( ! infiniteMode ) buildWallColliders( world, null, customCells );
+	const classicObstacleBodies = new Set();
+	if ( ! infiniteMode ) buildWallColliders( world, null, customCells, classicObstacleBodies );
 
 	const roadHalf = groundSize / 2;
 	const groundBody = rigidBody.create( world, {
@@ -242,12 +243,14 @@ async function init() {
 	const controls = new Controls();
 
 	const particles = new SmokeTrails( scene );
+	const explosion = new VehicleExplosion( scene );
 	const driftMarks = new DriftMarks( scene, mapParam );
 
 	const audio = new GameAudio();
 	audio.init( cam.camera, vehicleGroup );
 
 	const lapTimer = new LapTimer( infiniteMode ? [] : customCells, mapParam );
+	const obstacleBodies = infiniteTrack?.obstacleBodies ?? classicObstacleBodies;
 
 	const _forward = new THREE.Vector3();
 	const _camLead = new THREE.Vector3();
@@ -256,13 +259,21 @@ async function init() {
 		onContactAdded( bodyA, bodyB ) {
 
 			if ( bodyA !== sphereBody && bodyB !== sphereBody ) return;
+			if ( vehicle.explosionTime > 0 ) return;
 
 			_forward.set( 0, 0, 1 ).applyQuaternion( vehicle.container.quaternion );
 			_forward.y = 0;
 			_forward.normalize();
 
 			const impactVelocity = Math.abs( vehicle.modelVelocity.dot( _forward ) );
-			audio.playImpact( impactVelocity );
+			const hitObstacle = obstacleBodies.has( bodyA ) || obstacleBodies.has( bodyB );
+			audio.playImpact( hitObstacle ? Math.max( impactVelocity, 4 ) : impactVelocity );
+
+			if ( hitObstacle ) {
+
+				if ( vehicle.explode() ) explosion.trigger( vehicle.spherePos );
+
+			}
 
 		}
 	};
@@ -296,6 +307,7 @@ async function init() {
 		updateWorld( world, contactListener, dt );
 
 		vehicle.update( dt, input );
+		explosion.update( dt );
 		if ( infiniteTrack ) {
 
 			infiniteTrack.update( vehicle.spherePos, vehicle );

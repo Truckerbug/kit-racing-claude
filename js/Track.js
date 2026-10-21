@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 export const ORIENT_DEG = { 0: 0, 10: 180, 16: 90, 22: 270 };
+export const OBSTACLE_TYPES = [ 'track-bump', 'track-cones', 'track-barrels', 'track-tires' ];
 
 export const CELL_RAW = 9.99;
 export const GRID_SCALE = 0.75;
@@ -478,7 +479,7 @@ export function placePiece( models, key, gx, gz, orient ) {
 	if ( ! src ) return null;
 
 	let piece = src.clone();
-	if ( key === 'track-bump' ) {
+	if ( OBSTACLE_TYPES.includes( key ) ) {
 
 		const road = models[ 'track-straight' ].clone();
 		road.add( piece );
@@ -496,16 +497,39 @@ export function placePiece( models, key, gx, gz, orient ) {
 
 // ─── Track Codec ──────────────────────────────────────────
 
-const TYPE_NAMES = [ 'track-straight', 'track-corner', 'track-bump', 'track-finish' ];
+const LEGACY_TYPE_NAMES = [ 'track-straight', 'track-corner', 'track-bump', 'track-finish' ];
+const TYPE_NAMES = [ ...LEGACY_TYPE_NAMES, 'track-cones', 'track-barrels', 'track-tires' ];
 const TYPE_INDEX = {};
 for ( let i = 0; i < TYPE_NAMES.length; i ++ ) TYPE_INDEX[ TYPE_NAMES[ i ] ] = i;
 
 const ORIENT_TO_GODOT = [ 0, 16, 10, 22 ];
 const GODOT_TO_ORIENT = { 0: 0, 16: 1, 10: 2, 22: 3 };
+const VERSION_2_PREFIX = 'v2_';
 
 export { TYPE_NAMES };
 
 export function encodeCells( cells ) {
+
+	const needsVersion2 = cells.some( ( cell ) => ! LEGACY_TYPE_NAMES.includes( cell[ 2 ] ) );
+	if ( needsVersion2 ) {
+
+		const bytes = new Uint8Array( cells.length * 4 );
+
+		for ( let i = 0; i < cells.length; i ++ ) {
+
+			const [ gx, gz, name, godotOrient ] = cells[ i ];
+			const oi = GODOT_TO_ORIENT[ godotOrient ] ?? 0;
+
+			bytes[ i * 4 ] = gx + 128;
+			bytes[ i * 4 + 1 ] = gz + 128;
+			bytes[ i * 4 + 2 ] = TYPE_INDEX[ name ] ?? 0;
+			bytes[ i * 4 + 3 ] = oi;
+
+		}
+
+		return VERSION_2_PREFIX + bytesToBase64url( bytes );
+
+	}
 
 	const bytes = new Uint8Array( cells.length * 3 );
 
@@ -526,6 +550,28 @@ export function encodeCells( cells ) {
 }
 
 export function decodeCells( str ) {
+
+	if ( str.startsWith( VERSION_2_PREFIX ) ) {
+
+		const bytes = base64urlToBytes( str.slice( VERSION_2_PREFIX.length ) );
+		const cells = [];
+
+		for ( let i = 0; i + 3 < bytes.length; i += 4 ) {
+
+			const gx = bytes[ i ] - 128;
+			const gz = bytes[ i + 1 ] - 128;
+			const type = TYPE_NAMES[ bytes[ i + 2 ] ];
+			const orient = ORIENT_TO_GODOT[ bytes[ i + 3 ] ];
+
+			if ( type === undefined || orient === undefined ) throw new Error( 'Invalid encoded track cell' );
+			cells.push( [ gx, gz, type, orient ] );
+
+		}
+
+		if ( bytes.length % 4 !== 0 ) throw new Error( 'Invalid encoded track data' );
+		return cells;
+
+	}
 
 	const bytes = base64urlToBytes( str );
 	const cells = [];
@@ -548,18 +594,9 @@ export function decodeCells( str ) {
 
 export function computeSpawnPosition( cells = TRACK_CELLS ) {
 
-	let cell = cells[ 0 ];
-
-	for ( const c of cells ) {
-
-		if ( c[ 2 ] === 'track-finish' ) {
-
-			cell = c;
-			break;
-
-		}
-
-	}
+	const cell = cells.find( ( c ) => c[ 2 ] === 'track-finish' ) ||
+		cells.find( ( c ) => ! OBSTACLE_TYPES.includes( c[ 2 ] ) ) ||
+		cells[ 0 ];
 
 	if ( ! cell ) return { position: [ 3.5, 0.5, 5 ], angle: Math.PI };
 

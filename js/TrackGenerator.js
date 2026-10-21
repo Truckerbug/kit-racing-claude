@@ -59,6 +59,7 @@ export function generateTrack( seed ) {
 	const depth = randomInt( 14, 20 );
 	const path = [ [ 0, 0 ] ];
 	let current = path[ 0 ];
+	let lastObstacleIndex = - Infinity;
 
 	function appendLine( target ) {
 
@@ -133,6 +134,21 @@ export function generateTrack( seed ) {
 
 		}
 
+		if (
+			type === 'track-straight' &&
+			i > 1 &&
+			i < path.length - 2 &&
+			createTrackCell( path[ i - 2 ], path[ i - 1 ], point )[ 2 ] === 'track-straight' &&
+			createTrackCell( point, next, path[ i + 2 ] )[ 2 ] === 'track-straight' &&
+			i - lastObstacleIndex >= 2 &&
+			random() < 0.5
+		) {
+
+			type = [ 'track-cones', 'track-barrels', 'track-tires' ][ randomInt( 0, 2 ) ];
+			lastObstacleIndex = i;
+
+		}
+
 		cells.push( [ point[ 0 ] + offsetX, point[ 1 ] + offsetZ, type, orient ] );
 
 	}
@@ -146,9 +162,11 @@ export class InfiniteTrackGenerator {
 	constructor( seed ) {
 
 		this.random = mulberry32( seed );
+		this.obstacleRandom = mulberry32( ( seed ^ 0x9E3779B9 ) >>> 0 );
 		this.path = [ [ 0, 0 ], [ 0, 1 ] ];
 		this.pathStartIndex = 0;
 		this.nextCellIndex = 0;
+		this.lastObstacleIndex = - Infinity;
 
 	}
 
@@ -187,7 +205,7 @@ export class InfiniteTrackGenerator {
 		const startIndex = this.nextCellIndex;
 		const endIndex = startIndex + count - 1;
 
-		while ( this.pathStartIndex + this.path.length <= endIndex + 1 ) this.extendPath();
+		while ( this.pathStartIndex + this.path.length <= endIndex + 2 ) this.extendPath();
 
 		const cells = [];
 		const headings = [];
@@ -200,14 +218,32 @@ export class InfiniteTrackGenerator {
 			const previous = index === 0 ? [ 0, - 1 ] : getPoint( index - 1 );
 			const next = getPoint( index + 1 );
 
-			cells.push( createTrackCell( previous, point, next ) );
+			const cell = createTrackCell( previous, point, next );
+
+			if (
+				cell[ 2 ] === 'track-straight' &&
+				index > 2 &&
+				createTrackCell( getPoint( index - 2 ), previous, point )[ 2 ] === 'track-straight' &&
+				createTrackCell( point, next, getPoint( index + 2 ) )[ 2 ] === 'track-straight' &&
+				index - this.lastObstacleIndex >= 2 &&
+				this.obstacleRandom() / 0x100000000 < 0.5
+			) {
+
+				cell[ 2 ] = [ 'track-cones', 'track-barrels', 'track-tires' ][
+					Math.floor( this.obstacleRandom() / 0x100000000 * 3 )
+				];
+				this.lastObstacleIndex = index;
+
+			}
+
+			cells.push( cell );
 			headings.push( Math.atan2( next[ 0 ] - point[ 0 ], next[ 1 ] - point[ 1 ] ) );
 			incomingHeadings.push( Math.atan2( point[ 0 ] - previous[ 0 ], point[ 1 ] - previous[ 1 ] ) );
 
 		}
 
 		this.nextCellIndex = endIndex + 1;
-		const trimCount = this.nextCellIndex - 1 - this.pathStartIndex;
+		const trimCount = Math.max( 0, this.nextCellIndex - 2 - this.pathStartIndex );
 		if ( trimCount > 0 ) {
 
 			this.path.splice( 0, trimCount );

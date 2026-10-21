@@ -10,6 +10,114 @@ const INV_MAX_LIFE = 1 / MAX_LIFE;
 const _blPos = new THREE.Vector3();
 const _brPos = new THREE.Vector3();
 
+export class VehicleExplosion {
+
+	constructor( scene ) {
+
+		this.group = new THREE.Group();
+		this.group.visible = false;
+		scene.add( this.group );
+
+		this.flashMaterial = new THREE.MeshBasicMaterial( {
+			color: 0xffd86b,
+			transparent: true,
+			opacity: 0,
+			depthWrite: false,
+		} );
+		this.flash = new THREE.Mesh( new THREE.SphereGeometry( 1, 12, 8 ), this.flashMaterial );
+		this.group.add( this.flash );
+
+		const geometry = new THREE.TetrahedronGeometry( 0.12, 0 );
+		const colors = [ 0xff5a18, 0xffc247, 0x55565d ];
+		this.sparks = [];
+
+		for ( let i = 0; i < 30; i ++ ) {
+
+			const material = new THREE.MeshBasicMaterial( {
+				color: colors[ i % colors.length ],
+				transparent: true,
+				depthWrite: false,
+			} );
+			const mesh = new THREE.Mesh( geometry, material );
+			mesh.visible = false;
+			this.group.add( mesh );
+			this.sparks.push( {
+				mesh,
+				material,
+				velocity: new THREE.Vector3(),
+				life: 0,
+				maxLife: 0,
+			} );
+
+		}
+
+		this.elapsed = Infinity;
+
+	}
+
+	trigger( position ) {
+
+		this.group.position.copy( position );
+		this.group.visible = true;
+		this.elapsed = 0;
+		this.flash.scale.setScalar( 0.1 );
+		this.flashMaterial.opacity = 0.9;
+
+		for ( const spark of this.sparks ) {
+
+			const direction = new THREE.Vector3(
+				Math.random() * 2 - 1,
+				Math.random() * 1.5 + 0.2,
+				Math.random() * 2 - 1
+			).normalize();
+			spark.mesh.position.set( 0, 0, 0 );
+			spark.mesh.scale.setScalar( 0.6 + Math.random() * 1.2 );
+			spark.mesh.rotation.set( Math.random() * 6, Math.random() * 6, Math.random() * 6 );
+			spark.velocity.copy( direction ).multiplyScalar( 3 + Math.random() * 7 );
+			spark.life = 0.45 + Math.random() * 0.45;
+			spark.maxLife = spark.life;
+			spark.material.opacity = 1;
+			spark.mesh.visible = true;
+
+		}
+
+	}
+
+	update( dt ) {
+
+		if ( ! this.group.visible ) return;
+
+		this.elapsed += dt;
+		this.flash.scale.setScalar( 0.1 + this.elapsed * 7 );
+		this.flashMaterial.opacity = Math.max( 0, 0.9 * ( 1 - this.elapsed / 0.22 ) );
+
+		let active = this.elapsed < 0.22;
+		for ( const spark of this.sparks ) {
+
+			if ( spark.life <= 0 ) {
+
+				spark.mesh.visible = false;
+				continue;
+
+			}
+
+			spark.life -= dt;
+			spark.velocity.y -= 9.8 * dt;
+			spark.mesh.position.addScaledVector( spark.velocity, dt );
+			spark.mesh.rotation.x += dt * 8;
+			spark.mesh.rotation.z += dt * 6;
+			spark.material.opacity = Math.max( 0, spark.life / spark.maxLife );
+			if ( spark.life <= 0 ) spark.mesh.visible = false;
+			else active = true;
+
+		}
+
+		if ( ! active ) this.group.visible = false;
+
+	}
+
+}
+
 export class SmokeTrails {
 
 	constructor( scene ) {

@@ -57,6 +57,7 @@ export class Vehicle {
 		this.inputZ = 0;
 
 		this.driftIntensity = 0;
+		this.explosionTime = 0;
 
 	}
 
@@ -81,6 +82,7 @@ export class Vehicle {
 
 		const vehicleModel = model.clone();
 		this.vehicleModel = vehicleModel;
+		vehicleModel.visible = this.explosionTime <= 0;
 		this.container.add( vehicleModel );
 
 		// Find body and wheel nodes
@@ -117,6 +119,18 @@ export class Vehicle {
 	}
 
 	update( dt, controlsInput ) {
+
+		if ( this.explosionTime > 0 ) {
+
+			this.explosionTime -= dt;
+			this.spherePos.set( ...this.rigidBody.position );
+			this.container.position.set( this.spherePos.x, this.spherePos.y - 0.5, this.spherePos.z );
+			this.modelVelocity.set( 0, 0, 0 );
+
+			if ( this.explosionTime <= 0 ) this.respawn();
+			return;
+
+		}
 
 		this.inputX = controlsInput.x;
 		this.inputZ = controlsInput.z;
@@ -246,6 +260,43 @@ export class Vehicle {
 
 		this.driftIntensity = Math.abs( this.linearSpeed - this.acceleration ) +
 			( this.bodyNode ? Math.abs( this.bodyNode.rotation.z ) * 2 : 0 );
+
+	}
+
+	explode() {
+
+		if ( this.explosionTime > 0 ) return false;
+
+		this.explosionTime = 1.2;
+		this.vehicleModel.visible = false;
+		this.linearSpeed = 0;
+		this.angularSpeed = 0;
+		this.acceleration = 0;
+		rigidBody.setLinearVelocity( this.physicsWorld, this.rigidBody, [ 0, 0, 0 ] );
+		rigidBody.setAngularVelocity( this.physicsWorld, this.rigidBody, [ 0, 0, 0 ] );
+		this.spherePos.set( ...this.rigidBody.position );
+		this.container.position.set( this.spherePos.x, this.spherePos.y - 0.5, this.spherePos.z );
+		this.prevModelPos.copy( this.container.position );
+		this.modelVelocity.set( 0, 0, 0 );
+
+		return true;
+
+	}
+
+	respawn() {
+
+		rigidBody.setPosition( this.physicsWorld, this.rigidBody, this.spawnPosition, false );
+		rigidBody.setLinearVelocity( this.physicsWorld, this.rigidBody, [ 0, 0, 0 ] );
+		rigidBody.setAngularVelocity( this.physicsWorld, this.rigidBody, [ 0, 0, 0 ] );
+		this.spherePos.fromArray( this.spawnPosition );
+		this.sphereVel.set( 0, 0, 0 );
+		this.linearSpeed = 0;
+		this.angularSpeed = 0;
+		this.acceleration = 0;
+		this.container.rotation.set( 0, this.spawnAngle, 0 );
+		this.container.position.set( this.spherePos.x, this.spherePos.y - 0.5, this.spherePos.z );
+		this.prevModelPos.copy( this.container.position );
+		this.vehicleModel.visible = true;
 
 	}
 
