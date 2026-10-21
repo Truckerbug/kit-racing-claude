@@ -6,6 +6,51 @@ export const CELL_RAW = 9.99;
 export const GRID_SCALE = 0.75;
 
 const _dummy = new THREE.Object3D();
+const _forestFogMaterials = new WeakMap();
+
+function getForestFogMaterial( sourceMaterial ) {
+
+	let material = _forestFogMaterials.get( sourceMaterial );
+	if ( material ) return material;
+
+	material = sourceMaterial.clone();
+	const originalOnBeforeCompile = material.onBeforeCompile;
+	material.onBeforeCompile = ( shader, renderer ) => {
+
+		originalOnBeforeCompile.call( material, shader, renderer );
+
+		shader.vertexShader = shader.vertexShader
+			.replace(
+				'#include <common>',
+				'#include <common>\nvarying vec3 vForestFogWorldPosition;'
+			)
+			.replace(
+				'#include <fog_vertex>',
+				'#include <fog_vertex>\nvForestFogWorldPosition = ( modelMatrix * instanceMatrix * vec4( transformed, 1.0 ) ).xyz;'
+			);
+
+		shader.fragmentShader = shader.fragmentShader
+			.replace(
+				'#include <common>',
+				'#include <common>\nvarying vec3 vForestFogWorldPosition;'
+			)
+			.replace(
+				'float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );',
+				`float forestNoise = sin( vForestFogWorldPosition.x * 0.035 + sin( vForestFogWorldPosition.z * 0.021 ) ) *
+					cos( vForestFogWorldPosition.z * 0.031 + sin( vForestFogWorldPosition.x * 0.017 ) );
+				float forestFogFar = fogFar * ( 0.48 + forestNoise * 0.07 );
+				float fogFactor = smoothstep( fogNear * 0.5, forestFogFar, vFogDepth );`
+			);
+
+	};
+
+	const originalProgramCacheKey = material.customProgramCacheKey.bind( material );
+	material.customProgramCacheKey = () => `${ originalProgramCacheKey() }|irregular-forest-fog`;
+	_forestFogMaterials.set( sourceMaterial, material );
+
+	return material;
+
+}
 
 export const TRACK_CELLS = [
 	[ -3, -3, 'track-corner',   16 ],
@@ -302,6 +347,128 @@ export function buildTrack( scene, models, customCells ) {
 		}
 
 	}
+
+}
+
+export function buildTrackChunk( scene, models, cells, headings, incomingHeadings ) {
+
+	const trackGroup = new THREE.Group();
+	trackGroup.position.y = - 0.5;
+	trackGroup.scale.setScalar( 0.75 );
+
+	for ( const [ gx, gz, key, orient ] of cells ) {
+
+		const piece = placePiece( models, key, gx, gz, orient );
+		if ( piece ) trackGroup.add( piece );
+
+	}
+
+	const forest = models[ 'decoration-forest' ];
+	if ( forest && headings?.length === cells.length && incomingHeadings?.length === cells.length ) {
+
+		const treePositions = [];
+		const roadCells = new Set( cells.map( ( [ gx, gz ] ) => `${ gx },${ gz }` ) );
+		const placedTrees = new Set();
+
+		function addTree( gx, gz ) {
+
+			const key = `${ gx },${ gz }`;
+			if ( roadCells.has( key ) || placedTrees.has( key ) ) return;
+
+			placedTrees.add( key );
+			treePositions.push( ( gx + 0.5 ) * CELL_RAW, ( gz + 0.5 ) * CELL_RAW, 0 );
+
+		}
+
+		for ( let i = 0; i < cells.length; i ++ ) {
+
+			const [ gx, gz ] = cells[ i ];
+			if ( cells[ i ][ 2 ] === 'track-corner' ) {
+
+				const incoming = incomingHeadings[ i ];
+				const outgoing = headings[ i ];
+				const incomingRightX = Math.cos( incoming );
+				const incomingRightZ = - Math.sin( incoming );
+				const outgoingRightX = Math.cos( outgoing );
+				const outgoingRightZ = - Math.sin( outgoing );
+				const turn = Math.sin( outgoing - incoming );
+				const outsideSide = - Math.sign( turn );
+
+				for ( const [ sideX, sideZ ] of [
+					[ incomingRightX, incomingRightZ ],
+					[ outgoingRightX, outgoingRightZ ],
+				] ) {
+
+					const treeDX = Math.round( sideX * outsideSide );
+					const treeDZ = Math.round( sideZ * outsideSide );
+					for ( const row of [ 1, 2 ] ) addTree( gx + treeDX * row, gz + treeDZ * row );
+
+				}
+
+				const diagonalX = Math.round( ( incomingRightX + outgoingRightX ) * outsideSide );
+				const diagonalZ = Math.round( ( incomingRightZ + outgoingRightZ ) * outsideSide );
+				addTree( gx + diagonalX, gz + diagonalZ );
+
+				continue;
+
+			}
+
+			const sideX = Math.cos( headings[ i ] );
+			const sideZ = - Math.sin( headings[ i ] );
+
+			for ( const side of [ - 1, 1 ] ) {
+
+				for ( const row of [ 1, 2 ] ) {
+
+					const treeGX = Math.round( gx + side * sideX * row );
+					const treeGZ = Math.round( gz + side * sideZ * row );
+					addTree( treeGX, treeGZ );
+
+				}
+
+			}
+
+		}
+
+		forest.traverse( ( child ) => {
+
+			if ( ! child.isMesh ) return;
+
+			const forestMaterial = Array.isArray( child.material ) ?
+				child.material.map( getForestFogMaterial ) :
+				getForestFogMaterial( child.material );
+			const inst = new THREE.InstancedMesh( child.geometry, forestMaterial, treePositions.length / 3 );
+			inst.castShadow = true;
+			inst.receiveShadow = true;
+
+			for ( let i = 0; i < treePositions.length / 3; i ++ ) {
+
+				_dummy.position.set( treePositions[ i * 3 ], 0.5, treePositions[ i * 3 + 1 ] );
+				_dummy.updateMatrix();
+				inst.setMatrixAt( i, _dummy.matrix );
+
+			}
+
+			inst.instanceMatrix.needsUpdate = true;
+			trackGroup.add( inst );
+
+		} );
+
+	}
+
+	trackGroup.traverse( ( child ) => {
+
+		if ( child.isMesh ) {
+
+			child.castShadow = true;
+			child.receiveShadow = true;
+
+		}
+
+	} );
+
+	scene.add( trackGroup );
+	return trackGroup;
 
 }
 

@@ -6,8 +6,9 @@ import { createWorldSettings, createWorld, addBroadphaseLayer, addObjectLayer, e
 import { Vehicle, MAX_SPEED } from './Vehicle.js';
 import { Camera } from './Camera.js';
 import { Controls } from './Controls.js';
-import { buildTrack, decodeCells, computeSpawnPosition, computeTrackBounds } from './Track.js';
+import { buildTrack, decodeCells, computeSpawnPosition, computeTrackBounds, CELL_RAW, GRID_SCALE } from './Track.js';
 import { buildWallColliders, createSphereBody } from './Physics.js';
+import { InfiniteTrack } from './InfiniteTrack.js';
 import { SmokeTrails } from './Particles.js';
 import { DriftMarks } from './DriftMarks.js';
 import { GameAudio } from './Audio.js';
@@ -66,8 +67,12 @@ window.addEventListener( 'resize', () => {
 
 const loader = new ColorMapGLTFLoader();
 
-const modelNames = [
+const vehicleModelNames = [
 	'vehicle-truck-yellow', 'vehicle-truck-green', 'vehicle-truck-purple', 'vehicle-truck-red',
+];
+
+const modelNames = [
+	...vehicleModelNames,
 	'track-straight', 'track-corner', 'track-bump', 'track-finish',
 	'decoration-empty', 'decoration-forest', 'decoration-tents',
 ];
@@ -129,15 +134,19 @@ async function init() {
 	await loadModels();
 
 	const mapParam = new URLSearchParams( window.location.search ).get( 'map' );
+	const infiniteMode = new URLSearchParams( window.location.search ).get( 'mode' ) === 'infinite';
 	let customCells = null;
-	let spawn = computeSpawnPosition();
+	const infiniteCellSize = CELL_RAW * GRID_SCALE;
+	let spawn = infiniteMode ?
+		{ position: [ infiniteCellSize * 0.5, 0.5, infiniteCellSize * 2.5 ], angle: 0 } :
+		computeSpawnPosition();
 
 	if ( mapParam ) {
 
 		try {
 
 			customCells = decodeCells( mapParam );
-			spawn = computeSpawnPosition( customCells );
+			if ( ! infiniteMode ) spawn = computeSpawnPosition( customCells );
 
 		} catch ( e ) {
 
@@ -148,10 +157,10 @@ async function init() {
 	}
 
 	// Compute track bounds and size physics/shadows to fit
-	const bounds = computeTrackBounds( customCells );
+	const bounds = computeTrackBounds( infiniteMode ? null : customCells );
 	const hw = bounds.halfWidth;
 	const hd = bounds.halfDepth;
-	const groundSize = Math.max( hw, hd ) * 2 + 20;
+	const groundSize = infiniteMode ? 1000 : Math.max( hw, hd ) * 2 + 20;
 
 	const shadowExtent = Math.min( Math.max( hw, hd ) + 10, MAX_SHADOW_EXTENT );
 	dirLight.shadow.camera.left = - shadowExtent;
@@ -160,25 +169,8 @@ async function init() {
 	dirLight.shadow.camera.bottom = - shadowExtent;
 	dirLight.shadow.camera.updateProjectionMatrix();
 
-	scene.fog.near = groundSize * 0.4;
-	scene.fog.far = groundSize * 0.8;
-
-	buildTrack( scene, models, customCells );
-
-	// Probes
-
-	const probeHeight = 6;
-	const probes = new LightProbeGrid(
-		hw * 2, probeHeight, hd * 2,
-		Math.min( MAX_PROBE_RESOLUTION, Math.max( 4, Math.round( hw / 4 ) ) ),
-		2,
-		Math.min( MAX_PROBE_RESOLUTION, Math.max( 4, Math.round( hd / 4 ) ) ),
-	);
-	probes.position.set( bounds.centerX, probeHeight / 2, bounds.centerZ );
-	probes.bake( renderer, scene, { cubemapSize: 32, near: 0.1, far: groundSize } );
-	scene.add( probes );
-
-	// scene.add( new LightProbeGridHelper( probes, 0.5 ) );
+	scene.fog.near = infiniteMode ? infiniteCellSize * 1.5 : groundSize * 0.4;
+	scene.fog.far = infiniteMode ? infiniteCellSize * 4.5 : groundSize * 0.8;
 
 	//
 
@@ -197,17 +189,41 @@ async function init() {
 	world._OL_MOVING = OL_MOVING;
 	world._OL_STATIC = OL_STATIC;
 
-	buildWallColliders( world, null, customCells );
+	if ( ! infiniteMode ) buildWallColliders( world, null, customCells );
 
 	const roadHalf = groundSize / 2;
-	rigidBody.create( world, {
+	const groundBody = rigidBody.create( world, {
 		shape: box.create( { halfExtents: [ roadHalf, 0.01, roadHalf ] } ),
 		motionType: MotionType.STATIC,
 		objectLayer: OL_STATIC,
-		position: [ bounds.centerX, - 0.125, bounds.centerZ ],
+		position: [ infiniteMode ? 0 : bounds.centerX, - 0.125, infiniteMode ? 0 : bounds.centerZ ],
 		friction: 5.0,
 		restitution: 0.0,
 	} );
+
+	let infiniteTrack = null;
+	if ( infiniteMode ) {
+
+		infiniteTrack = new InfiniteTrack( scene, models, world, Math.floor( Math.random() * 0x100000000 ) );
+
+	} else {
+
+		buildTrack( scene, models, customCells );
+
+	}
+
+	const probeHeight = 6;
+	const probes = new LightProbeGrid(
+		hw * 2, probeHeight, hd * 2,
+		Math.min( MAX_PROBE_RESOLUTION, Math.max( 4, Math.round( hw / 4 ) ) ),
+		2,
+		Math.min( MAX_PROBE_RESOLUTION, Math.max( 4, Math.round( hd / 4 ) ) ),
+	);
+	probes.position.set( bounds.centerX, probeHeight / 2, bounds.centerZ );
+	probes.bake( renderer, scene, { cubemapSize: 32, near: 0.1, far: infiniteMode ? 150 : groundSize } );
+	scene.add( probes );
+
+	// scene.add( new LightProbeGridHelper( probes, 0.5 ) );
 
 	const sphereBody = createSphereBody( world, spawn.position );
 
@@ -215,17 +231,8 @@ async function init() {
 	vehicle.rigidBody = sphereBody;
 	vehicle.physicsWorld = world;
 
-	if ( spawn ) {
-
-		const [ sx, sy, sz ] = spawn.position;
-		vehicle.spherePos.set( sx, sy, sz );
-		vehicle.prevModelPos.set( sx, 0, sz );
-
-	}
-
-	vehicle.container.rotation.y = spawn ? spawn.angle : Math.PI;
-
-	const vehicleGroup = vehicle.init( models[ 'vehicle-truck-yellow' ] );
+	let vehicleModelIndex = 0;
+	const vehicleGroup = vehicle.init( models[ vehicleModelNames[ vehicleModelIndex ] ] );
 	scene.add( vehicleGroup );
 
 	dirLight.target = vehicleGroup;
@@ -240,7 +247,7 @@ async function init() {
 	const audio = new GameAudio();
 	audio.init( cam.camera, vehicleGroup );
 
-	const lapTimer = new LapTimer( customCells, mapParam );
+	const lapTimer = new LapTimer( infiniteMode ? [] : customCells, mapParam );
 
 	const _forward = new THREE.Vector3();
 	const _camLead = new THREE.Vector3();
@@ -279,10 +286,30 @@ async function init() {
 		const dt = Math.min( timer.getDelta(), 1 / 30 );
 
 		if ( input.cameraToggle ) cam.cycleMode();
+		if ( input.vehicleCycle ) {
+
+			vehicleModelIndex = ( vehicleModelIndex + 1 ) % vehicleModelNames.length;
+			vehicle.setModel( models[ vehicleModelNames[ vehicleModelIndex ] ] );
+
+		}
 
 		updateWorld( world, contactListener, dt );
 
 		vehicle.update( dt, input );
+		if ( infiniteTrack ) {
+
+			infiniteTrack.update( vehicle.spherePos, vehicle );
+
+			if (
+				Math.abs( vehicle.spherePos.x - groundBody.position[ 0 ] ) > 200 ||
+				Math.abs( vehicle.spherePos.z - groundBody.position[ 2 ] ) > 200
+			) {
+
+				rigidBody.setPosition( world, groundBody, [ vehicle.spherePos.x, - 0.125, vehicle.spherePos.z ], false );
+
+			}
+
+		}
 
 		dirLight.position.set(
 			vehicle.spherePos.x + 11.4,

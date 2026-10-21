@@ -14,7 +14,7 @@ function addDebugBox( group, halfExtents, position, quaternion ) {
 
 }
 
-function addBumpColliders( world, cx, cz, rad ) {
+function addBumpColliders( world, cx, cz, rad, bodies ) {
 
 	const radius = 1.25;
 	const height = 0.44;
@@ -38,7 +38,7 @@ function addBumpColliders( world, cx, cz, rad ) {
 		const halfExtents = [ 1.15, 0.07, rampLength / 2 ];
 		const rotation = [ quaternion.x, quaternion.y, quaternion.z, quaternion.w ];
 
-		rigidBody.create( world, {
+		bodies.push( rigidBody.create( world, {
 			shape: box.create( { halfExtents } ),
 			motionType: MotionType.STATIC,
 			objectLayer: world._OL_STATIC,
@@ -46,7 +46,7 @@ function addBumpColliders( world, cx, cz, rad ) {
 			quaternion: rotation,
 			friction: 1.0,
 			restitution: 0.0,
-		} );
+		} ) );
 
 	}
 
@@ -54,6 +54,7 @@ function addBumpColliders( world, cx, cz, rad ) {
 
 export function buildWallColliders( world, debugGroup, customCells ) {
 
+	const bodies = [];
 	const S = GRID_SCALE;
 	const CELL_HALF = CELL_RAW / 2;
 
@@ -89,7 +90,7 @@ export function buildWallColliders( world, debugGroup, customCells ) {
 			];
 			const quaternion = [ 0, Math.sin( - aMid / 2 ), 0, Math.cos( - aMid / 2 ) ];
 
-			rigidBody.create( world, {
+			bodies.push( rigidBody.create( world, {
 				shape: box.create( { halfExtents } ),
 				motionType: MotionType.STATIC,
 				objectLayer: world._OL_STATIC,
@@ -97,7 +98,7 @@ export function buildWallColliders( world, debugGroup, customCells ) {
 				quaternion,
 				friction: 0.0,
 				restitution: 0.1,
-			} );
+			} ) );
 
 			if ( debugGroup ) addDebugBox( debugGroup, halfExtents, position, quaternion );
 
@@ -127,7 +128,7 @@ export function buildWallColliders( world, debugGroup, customCells ) {
 				const position = [ wx, wallY, wz ];
 				const quaternion = [ 0, Math.sin( rad / 2 ), 0, Math.cos( rad / 2 ) ];
 
-				rigidBody.create( world, {
+				bodies.push( rigidBody.create( world, {
 					shape: box.create( { halfExtents } ),
 					motionType: MotionType.STATIC,
 					objectLayer: world._OL_STATIC,
@@ -135,13 +136,13 @@ export function buildWallColliders( world, debugGroup, customCells ) {
 					quaternion,
 					friction: 0.0,
 					restitution: 0.1,
-				} );
+				} ) );
 
 				if ( debugGroup ) addDebugBox( debugGroup, halfExtents, position, quaternion );
 
 			}
 
-			if ( key === 'track-bump' ) addBumpColliders( world, cx, cz, rad );
+			if ( key === 'track-bump' ) addBumpColliders( world, cx, cz, rad, bodies );
 
 		} else if ( key === 'track-corner' ) {
 
@@ -155,6 +156,8 @@ export function buildWallColliders( world, debugGroup, customCells ) {
 		}
 
 	}
+
+	return bodies;
 
 }
 
