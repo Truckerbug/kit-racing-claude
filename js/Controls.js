@@ -5,6 +5,7 @@ export class Controls {
 		this.keys = {};
 		this.previousViewKey = false;
 		this.previousRestartKey = false;
+		this.previousVehicleKey = false;
 		this.x = 0;
 		this.z = 0;
 
@@ -166,7 +167,11 @@ export class Controls {
 		const restart = restartKey && ! this.previousRestartKey;
 		this.previousRestartKey = restartKey;
 
-		return { x, z, touchActive: this.touchActive, cameraToggle, restart };
+		const vehicleKey = !! this.keys[ 'KeyC' ];
+		const vehicleCycle = vehicleKey && ! this.previousVehicleKey;
+		this.previousVehicleKey = vehicleKey;
+
+		return { x, z, touchActive: this.touchActive, cameraToggle, restart, vehicleCycle };
 
 	}
 

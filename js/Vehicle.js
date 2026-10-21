@@ -12,7 +12,7 @@ const _up = new THREE.Vector3( 0, 1, 0 );
 
 const SPEED_SCALE = 12.5;
 const LINEAR_DAMP = 0.1;
-export const MAX_SPEED = 1.5;
+export const MAX_SPEED = 1.75;
 
 function lerpAngle( a, b, t ) {
 
@@ -46,6 +46,7 @@ export class Vehicle {
 		this.container = new THREE.Group();
 		this.container.rotation.y = this.spawnAngle;
 		this.bodyNode = null;
+		this.vehicleModel = null;
 		this.wheels = [];
 		this.wheelFL = null;
 		this.wheelFR = null;
@@ -61,8 +62,25 @@ export class Vehicle {
 
 	init( model ) {
 
-		const vehicleModel = model.clone();
+		this.setModel( model );
 
+		return this.container;
+
+	}
+
+	setModel( model ) {
+
+		if ( this.vehicleModel ) this.container.remove( this.vehicleModel );
+
+		this.bodyNode = null;
+		this.wheels = [];
+		this.wheelFL = null;
+		this.wheelFR = null;
+		this.wheelBL = null;
+		this.wheelBR = null;
+
+		const vehicleModel = model.clone();
+		this.vehicleModel = vehicleModel;
 		this.container.add( vehicleModel );
 
 		// Find body and wheel nodes
@@ -95,8 +113,6 @@ export class Vehicle {
 			}
 
 		} );
-
-		return this.container;
 
 	}
 

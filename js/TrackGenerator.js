@@ -5,6 +5,35 @@ const CORNER_ORIENTATIONS = {
 	10: 10,
 };
 
+function createTrackCell( previous, point, next ) {
+
+	const dx1 = previous[ 0 ] - point[ 0 ];
+	const dz1 = previous[ 1 ] - point[ 1 ];
+	const dx2 = next[ 0 ] - point[ 0 ];
+	const dz2 = next[ 1 ] - point[ 1 ];
+	let mask = 0;
+
+	if ( dz1 < 0 || dz2 < 0 ) mask |= 8;
+	if ( dz1 > 0 || dz2 > 0 ) mask |= 4;
+	if ( dx1 > 0 || dx2 > 0 ) mask |= 2;
+	if ( dx1 < 0 || dx2 < 0 ) mask |= 1;
+
+	if ( mask === 3 || mask === 12 ) {
+
+		return [ point[ 0 ], point[ 1 ], 'track-straight', mask === 3 ? 16 : 0 ];
+
+	}
+
+	if ( CORNER_ORIENTATIONS[ mask ] !== undefined ) {
+
+		return [ point[ 0 ], point[ 1 ], 'track-corner', CORNER_ORIENTATIONS[ mask ] ];
+
+	}
+
+	throw new Error( `Generated invalid road connections: ${ mask }` );
+
+}
+
 function mulberry32( seed ) {
 
 	let state = seed >>> 0;
@@ -88,37 +117,15 @@ export function generateTrack( seed ) {
 		const previous = path[ ( i + path.length - 1 ) % path.length ];
 		const next = path[ ( i + 1 ) % path.length ];
 		const point = path[ i ];
-		const dx1 = previous[ 0 ] - point[ 0 ];
-		const dz1 = previous[ 1 ] - point[ 1 ];
-		const dx2 = next[ 0 ] - point[ 0 ];
-		const dz2 = next[ 1 ] - point[ 1 ];
-		let mask = 0;
-
-		if ( dz1 < 0 || dz2 < 0 ) mask |= 8;
-		if ( dz1 > 0 || dz2 > 0 ) mask |= 4;
-		if ( dx1 > 0 || dx2 > 0 ) mask |= 2;
-		if ( dx1 < 0 || dx2 < 0 ) mask |= 1;
-
-		let type, orient;
-		if ( mask === 3 || mask === 12 ) {
-
-			type = 'track-straight';
-			orient = mask === 3 ? 16 : 0;
-
-		} else if ( CORNER_ORIENTATIONS[ mask ] !== undefined ) {
-
-			type = 'track-corner';
-			orient = CORNER_ORIENTATIONS[ mask ];
-
-		} else {
-
-			throw new Error( `Generated invalid road connections: ${ mask }` );
-
-		}
+		const cell = createTrackCell( previous, point, next );
+		let type = cell[ 2 ];
+		let orient = cell[ 3 ];
 
 		if ( i === 1 ) {
 
 			type = 'track-finish';
+			const dx2 = next[ 0 ] - point[ 0 ];
+			const dz2 = next[ 1 ] - point[ 1 ];
 			if ( dx2 > 0 ) orient = 22;
 			else if ( dx2 < 0 ) orient = 16;
 			else if ( dz2 < 0 ) orient = 0;
@@ -131,5 +138,85 @@ export function generateTrack( seed ) {
 	}
 
 	return cells;
+
+}
+
+export class InfiniteTrackGenerator {
+
+	constructor( seed ) {
+
+		this.random = mulberry32( seed );
+		this.path = [ [ 0, 0 ], [ 0, 1 ] ];
+		this.pathStartIndex = 0;
+		this.nextCellIndex = 0;
+
+	}
+
+	appendLine( dx, dz, length ) {
+
+		const current = this.path[ this.path.length - 1 ];
+
+		for ( let i = 0; i < length; i ++ ) {
+
+			this.path.push( [ current[ 0 ] + dx * ( i + 1 ), current[ 1 ] + dz * ( i + 1 ) ] );
+
+		}
+
+	}
+
+	extendPath() {
+
+		const random = () => this.random() / 0x100000000;
+		const randomInt = ( min, max ) => min + Math.floor( random() * ( max - min + 1 ) );
+
+		this.appendLine( 0, 1, randomInt( 4, 7 ) );
+
+		if ( random() < 0.9 ) {
+
+			const direction = random() < 0.5 ? - 1 : 1;
+			this.appendLine( direction, 0, randomInt( 2, 4 ) );
+
+		}
+
+	}
+
+	generateChunk( count ) {
+
+		if ( ! Number.isInteger( count ) || count < 1 ) throw new RangeError( 'Chunk size must be a positive integer' );
+
+		const startIndex = this.nextCellIndex;
+		const endIndex = startIndex + count - 1;
+
+		while ( this.pathStartIndex + this.path.length <= endIndex + 1 ) this.extendPath();
+
+		const cells = [];
+		const headings = [];
+		const incomingHeadings = [];
+		const getPoint = ( index ) => this.path[ index - this.pathStartIndex ];
+
+		for ( let index = startIndex; index <= endIndex; index ++ ) {
+
+			const point = getPoint( index );
+			const previous = index === 0 ? [ 0, - 1 ] : getPoint( index - 1 );
+			const next = getPoint( index + 1 );
+
+			cells.push( createTrackCell( previous, point, next ) );
+			headings.push( Math.atan2( next[ 0 ] - point[ 0 ], next[ 1 ] - point[ 1 ] ) );
+			incomingHeadings.push( Math.atan2( point[ 0 ] - previous[ 0 ], point[ 1 ] - previous[ 1 ] ) );
+
+		}
+
+		this.nextCellIndex = endIndex + 1;
+		const trimCount = this.nextCellIndex - 1 - this.pathStartIndex;
+		if ( trimCount > 0 ) {
+
+			this.path.splice( 0, trimCount );
+			this.pathStartIndex += trimCount;
+
+		}
+
+		return { cells, headings, incomingHeadings, startIndex, endIndex };
+
+	}
 
 }

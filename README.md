@@ -6,7 +6,9 @@
 python3 -m http.server 8000 --bind 0.0.0.0
 ```
 
-Press **R** to restart the game.
+Press **C** to cycle between the yellow, green, purple, and red trucks. Press **R** to restart the game.
+
+Use the **Infinite course** button in the top-right corner to switch to a randomly generated endless track. The same button returns to the classic course.
 
 ## Credits
 
